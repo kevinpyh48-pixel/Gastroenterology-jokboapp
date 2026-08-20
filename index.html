@@ -2339,10 +2339,12 @@ function seqJump(i){
 /* 결번 안내 한 줄. 🧩 탭에 있는 문항을 "범위 밖"이라 부르지 않는 것이 이 함수의 존재 이유다. */
 function missNote(miss, nBk){
   if (miss <= 0) return ".";
-  const bits = [];
-  if (nBk > 0) bits.push(nBk + "개는 선지·그림이 복원되지 않아 채점에서만 빠졌고 🧩 불완전 복원 탭에 있습니다");
-  if (miss - nBk > 0) bits.push((miss - nBk) + "개는 이 과목 범위 밖이거나 아직 미분류입니다");
-  return " · 결번 " + miss + "개 — " + bits.join(" · ") + ".";
+  const inApp = "선지·그림이 복원되지 않아 채점에서만 빠졌고 🧩 불완전 복원 탭에 있습니다";
+  const gone = "이 과목 범위 밖이거나 아직 미분류입니다";
+  if (nBk >= miss) return " · 결번 " + miss + "개는 " + inApp + ".";
+  if (nBk <= 0) return " · 결번 " + miss + "개는 " + gone + ".";
+  return " · 결번 " + miss + "개 — " + nBk + "개는 " + inApp
+       + " · " + (miss - nBk) + "개는 " + gone + ".";
 }
 function startYear(){
   const qs = yearPool();
@@ -2353,13 +2355,17 @@ function startYear(){
   if (qs.length){
     const nums = qs.map((q) => q._n);
     const lo = Math.min.apply(null, nums), hi = Math.max.apply(null, nums);
-    const miss = (hi - lo + 1) - qs.length;
-    /* 결번을 ①🧩 불완전 복원 / ②정말 없는 것 으로 가른다 — 위 주석 참고. */
+    /* 결번을 ①🧩 불완전 복원 / ②정말 없는 것 으로 가른다 — 위 주석 참고.
+       ⚠️ 엔트리가 아니라 **번호**로 센다. 같은 문항이 연도 버킷과 일차 버킷에 복사돼 있어
+       (2022 Q93 은 3일차·2022족보 양쪽에 있다) 엔트리로 세면 "결번 4개 — 7개는 🧩" 이 나온다. */
     const have = {}; qs.forEach((q) => (have[q._n] = 1));
-    const nBk = brokenPool().filter((q) => {
+    const bk = {};
+    brokenPool().forEach((q) => {
       const v = srcYN(q);
-      return v && v.y === curYear && v.n >= lo && v.n <= hi && !have[v.n];
-    }).length;
+      if (v && v.y === curYear && !have[v.n]) bk[v.n] = 1;
+    });
+    let miss = 0, nBk = 0;
+    for (let n = lo; n <= hi; n++){ if (have[n]) continue; miss++; if (bk[n]) nBk++; }
     yearNote = "<h2>📄 " + curYear + " 원본 순서</h2><p>" + lo + "번~" + hi + "번 중 <b>" + qs.length +
       "문항</b> 수록" + missNote(miss, nBk) +
       " 문항은 원본 번호순 · 선지는 섞입니다 · 1~9 로 고르고 →/← 로 오가거나 아래 번호 줄에서 바로 고르세요.</p>";
