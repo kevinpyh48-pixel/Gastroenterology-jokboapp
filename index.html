@@ -4213,7 +4213,7 @@ function showUpdateBanner(){
     head.className = "sub"; head.style.cssText = "margin:0 0 6px;text-align:left";
     head.textContent = R.sec > 0 ? "같은 시간을 달렸다면" : "오늘의 페이스는 이쯤입니다";
     el.appendChild(head);
-    ATHLETES.concat([[R.pmin, pace()[2], "나", "오늘 고른 페이스"]])
+    ATHLETES.concat([[R.pmin, "📍", "나", pace()[1] + " · 오늘 고른 페이스"]])
       .sort(function(a, b){ return a[0] - b[0]; })
       .forEach(function(a){
         const row = document.createElement("div");
@@ -4257,6 +4257,7 @@ function showUpdateBanner(){
 
   /* 1초마다 시간을 쌓는다. 3분 넘게 채점이 없으면 자리를 비운 것으로 보고 멈춘다 —
      "켜두기만 하면 완주"를 막는 유일한 장치라 여기를 없애면 기록이 의미를 잃는다. */
+  let lastKm = "";
   setInterval(function(){
     if (!MAP_OK || !R.on) return;
     const now = Date.now();
@@ -4265,7 +4266,10 @@ function showUpdateBanner(){
     if (resting()){ buildBar(); return; }
     R.sec += dt;
     if (Math.floor(R.sec) % 10 === 0) save();
-    buildBar(); draw();
+    $("r-el").textContent = mmss(R.sec);          /* 시계는 매초, 나머지는 거리가 움직일 때만 */
+    const d2 = km().toFixed(2);
+    if (d2 !== lastKm){ lastKm = d2; draw(); }
+    buildBar();
   }, 1000);
 
   function setOn(on){
