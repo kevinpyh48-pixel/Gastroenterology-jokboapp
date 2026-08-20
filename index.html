@@ -3440,7 +3440,7 @@ function auSubmit(){
   });
 }
 function mountAuth(){
-  if (!auEl("authsheet")) return;
+  if (!auEl("authsheet")){ console.warn("authsheet 마크업이 아직 없다 — 부팅이 파싱보다 빨랐다"); return; }
   auEl("au-close").addEventListener("click", auClose);
   auEl("au-go").addEventListener("click", auSubmit);
   auEl("au-swap").addEventListener("click", () => { auMode = auMode === "signup" ? "login" : "signup"; auRender(); });
@@ -3757,12 +3757,22 @@ if (!CFG.dayView) document.querySelector('#views [data-view="day"]').style.displ
 if (!EXTRA_BUCKETS.length) document.querySelector('#views [data-view="extra"]').style.display = "none";
 buildDaySel(); buildYearSel(); buildOrderSel(); buildViews(); buildModes(); applyDay();
 if (view !== "day") [...document.getElementById("views").children].forEach((c) => c.setAttribute("aria-pressed", c.dataset.view === view ? "true" : "false"));
-explFromCache();   /* 캐시된 해설을 먼저 되붙인다 — 첫 렌더에 바로 보이게 */
-refresh(); mountTools();
-explSync();        /* 그 다음 서버에서 새로 받는다(등급도 여기서 갱신된다) */
-/* 토론 요약(문항별 댓글·논란 수)은 한 번만 받아온다 — 카드마다 조회하면 요청이 수십 개 나간다.
-   도착하면 배지·⚖️논란 목록을 반영하려고 한 번 더 그린다. */
-if (DISCUSS_URL) loadSummary(() => refresh());
+/* ⚠️ 이 스크립트 블록은 <dialog> 마크업(로그인·시험·완주 시트)보다 **앞에** 있다.
+   그래서 부팅을 파싱이 끝난 뒤로 미룬다 — 안 미루면 mountAuth() 가 첫 줄
+   `if (!auEl("authsheet")) return;` 에서 조용히 빠져나가 로그인 시트의 버튼에 리스너가
+   하나도 안 붙는다. 🔑 버튼만 그 앞에서 붙어서 "시트는 열리는데 안에 있는 닫기·로그인·
+   회원가입이 전부 먹통"이 된다(2026-08-21 실측). 앞으로 시트를 더 붙여도 같은 함정이라
+   호출 지점 하나를 미루는 것으로 막는다. */
+function boot(){
+  explFromCache();   /* 캐시된 해설을 먼저 되붙인다 — 첫 렌더에 바로 보이게 */
+  refresh(); mountTools();
+  explSync();        /* 그 다음 서버에서 새로 받는다(등급도 여기서 갱신된다) */
+  /* 토론 요약(문항별 댓글·논란 수)은 한 번만 받아온다 — 카드마다 조회하면 요청이 수십 개 나간다.
+     도착하면 배지·⚖️논란 목록을 반영하려고 한 번 더 그린다. */
+  if (DISCUSS_URL) loadSummary(() => refresh());
+}
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+else boot();
 
 /* ===== 📱 PWA =====
    sw.js·manifest.json 은 배포 저장소(~/jokbo-site*)에 정적으로 둔다 — 정본은 _자동화/sw.js 이고
