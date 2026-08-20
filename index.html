@@ -1503,6 +1503,7 @@ function keepCardInView(){
         ② 아니면 모드별 큐를 그냥 옮긴다 — 채점도 기록도 없이 넘겨보기(→ 이후 ← 면 제자리)
         ③ 한 화면에 여러 장인 화면(논란·🧩)은 카드 사이 스크롤. */
 function navQ(step){
+  if (document.querySelector("dialog[open]")) return;       /* 시트가 열려 있으면 뒤 카드가 움직이지 않게 */
   if (view === "exam"){ if (EX && !EX.done) examGo(step); return; }
   const cards = Array.prototype.slice.call(document.querySelectorAll("#deck .card"));
   if (cards.length > 1){
