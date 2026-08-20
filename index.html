@@ -2838,15 +2838,12 @@ const exHide = (d) => { if (typeof d.close === "function" && d.open) d.close(); 
 const EXCFG_K = SK("examcfg"), EXLOG_K = SK("examlog");
 const examDefaults = () => ({ name:"", strict:true, min:0, n:20, src:"all",
   tryMode:"all", tryN:1, tryLo:0, tryHi:9, accOn:false, accLo:0, accHi:100, buckets:[], lec:"all", sub:"" });
-/* ⚙️ 직접 만들기 시트의 시작 상태. 저장된 설정이 없으면 **일차를 전부 켜고 연다** —
-   빈 buckets 로 열면 examPool 이 0문항을 돌려줘, 아무것도 안 한 사람이 "0 문항이 조건에
-   맞습니다"부터 마주친다. examPool 의 "안 고르면 0문항" 규칙은 그대로 두고 기본값만 채운다. */
+/* ⚙️ 직접 만들기 시트의 시작 상태. **범위는 빈 채로 연다**(0문항) — 여기서 일차를 미리
+   켜 두면 교수님·강의록 칩이 영영 안 뜬다. 그 칩들은 일차를 딱 하나 골랐을 때만 나오고,
+   전 범위로 풀 길은 이미 프리셋 카드가 맡고 있다. 시트는 좁혀 들어가는 길이다. */
 function examCfg(){
   const d = examDefaults();
-  let c = d;
-  try { c = Object.assign(d, JSON.parse(localStorage.getItem(EXCFG_K)) || {}); } catch(e){}
-  if (!(c.buckets || []).length) c.buckets = DAY_BUCKETS.slice();
-  return c;
+  try { return Object.assign(d, JSON.parse(localStorage.getItem(EXCFG_K)) || {}); } catch(e){ return d; }
 }
 /* 📝 프리셋 — 시험을 "만드는" 대신 "고르는" 길. cfg 는 examDefaults() 위에 덮어쓰기만 하고
    거르는 일은 전부 examPool() 이 한다 — 필터 규칙을 두 벌로 가르지 않기 위해서다.
@@ -3074,7 +3071,7 @@ function examIntro(){
   el.appendChild(grid);
 
   const more = document.createElement("button"); more.type = "button"; more.className = "exmore";
-  more.textContent = "⚙️ 직접 만들기 — 일차·강의록·정답률로 고르기";
+  more.textContent = "⚙️ 직접 만들기 — 일차 · 교수님 · 강의록 · 정답률로 고르기";
   more.addEventListener("click", openExamSheet);
   el.appendChild(more);
 
@@ -3191,7 +3188,9 @@ function openExamSheet(){
   nameEl.addEventListener("input", () => { cfg.name = nameEl.value; });
   s0.appendChild(nameEl);
 
-  const s1 = sec("범위 — 일차", "<b>고른 일차만</b> 출제됩니다 — 하나도 안 고르면 0문항입니다. 같은 문항이 여러 버킷에 겹쳐 있어도 한 번만 나옵니다.");
+  const s1 = sec("범위 — 일차", "<b>고른 일차만</b> 출제됩니다 — 하나도 안 고르면 0문항입니다. "
+    + "<b>일차를 하나만 고르면</b> 그 아래에 교수님 칩이 뜨고, 강의록이 있는 교수님은 강의록까지 좁힐 수 있습니다. "
+    + "같은 문항이 여러 버킷에 겹쳐 있어도 한 번만 나옵니다.");
   /* 연도 버킷은 칩으로 안 내놓는다 — 일차 사본과 같은 문항이라 고를 이유가 없고 목록만 길어진다.
      아무것도 안 고르면 examPool 이 여전히 연도 버킷까지 훑으므로 "전체"의 뜻은 그대로다. */
   const pickable = DAY_BUCKETS.concat(EXTRA_BUCKETS);
@@ -3214,7 +3213,7 @@ function openExamSheet(){
     const g = only ? dayGroups(only) : null;
     if (!g || !g.length) return;
     const h = document.createElement("p"); h.className = "exnote"; h.style.margin = "10px 0 6px";
-    h.textContent = only + " 안에서 강의 고르기";
+    h.textContent = only + " 안에서 교수님 고르기";   /* 칩에 실리는 건 교수 이름이다 */
     lecHost.appendChild(h);
     lecPaint = chips(lecHost, [["전체", "all"]].concat(g.map(([prof]) => [prof, prof])),
       (k) => cfg.lec === k, (k) => { cfg.lec = k; cfg.sub = ""; drawSub(); });
@@ -3986,8 +3985,9 @@ function showUpdateBanner(){
   window.addEventListener("pagehide", syncBeacon);
 })();
 
-/* 👉 스와이프 — 드릴·오답노트처럼 '다음' 버튼이 떠 있는 화면에서 왼쪽으로 밀면 다음 문제.
-   목록 모드는 세로 스크롤이 본업이라 스와이프를 안 건다(오터치 방지). */
+/* 👉 스와이프 — 왼쪽으로 밀면 다음 문제, 오른쪽이면 이전. 키보드 화살표와 같은 navQ 를 탄다
+   (예전엔 '다음' 버튼이 떠 있는 화면에서만 먹었다 = 안 푼 문항에선 죽어 있었다).
+   세로 스크롤이 본업인 화면을 지키는 건 아래 각도·거리 문턱이다 — 모드로 가르지 않는다. */
 (function swipeNext(){
   let x0 = 0, y0 = 0, t0 = 0;
   addEventListener("touchstart", (e) => {
@@ -3998,7 +3998,7 @@ function showUpdateBanner(){
     if (Date.now() - t0 > 600) return;                       /* 길게 끈 건 스크롤·드래그 */
     if (Math.abs(dx) < 70 || Math.abs(dy) > Math.abs(dx) * 0.6) return;   /* 수평 스와이프만 */
     if (document.querySelector(".lightbox.show")) return;    /* 이미지 확대 중엔 넘기지 않는다 */
-    if (dx < 0){ const b = document.querySelector(".nextbtn"); if (b) b.click(); }
+    navQ(dx < 0 ? 1 : -1);
   }, { passive: true });
 })();
 </script>
