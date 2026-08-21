@@ -445,6 +445,7 @@
   .qtile:hover{border-color:var(--line-strong);}
   .qtile:focus-visible{outline:none;border-color:var(--vote);}
   .qtile.done{border-color:var(--ok);background:var(--ok-bg);}
+  .qtile.miss{border-color:var(--bad);background:var(--bad-bg);}
   /* 현재 위치는 "푼 문항" 초록에 묻히면 안 된다 — 파랑이 이긴다 */
   .qtile.cur{border-color:var(--vote);background:var(--vote-soft);}
   .nextbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
@@ -2736,7 +2737,9 @@ function drillNext(d, result, reveal){
   const bar = document.createElement("div"); bar.className = "nextbar";
   const msg = document.createElement("span");
   const ok = result === "correct", seq = isSeq();
-  if (seq) yearSeen[qid(d)] = 1;                /* 클릭이 아니라 채점 시점에 찍는다 — 번호로 튀어도 남게 */
+  /* 1=맞힘 · 2=틀림. 클릭이 아니라 채점 시점에 찍는다 — 번호로 튀어도 남게.
+     ⛔ "revisit"(이미 푼 문항 미리보기)엔 손대지 않는다 — ok 가 false 라 맞힌 기록을 오답으로 덮는다. */
+  if (seq && result !== "revisit") yearSeen[qid(d)] = ok ? 1 : 2;
   msg.className = "nextmsg " + (ok ? "ok" : "again");
   msg.textContent = result === "revisit" ? "🔁 이미 푼 문항 — 기록은 그대로입니다."
                         : seq ? (ok ? "✅ 정답" : "✍️ 오답 — 오답노트에 쌓입니다.")
@@ -2827,12 +2830,15 @@ function yearStrip(){
   const num = (q, i) => mode === "year" ? q._n : (i + 1);   /* 연도별은 원본 시험지 번호가 곧 좌표다.
                                    목록은 강의를 넘나들어 번호가 겹치므로 순번으로 센다. */
   const tile = i => {
-    const q = all[i], done = !!yearSeen[qid(q)], nn = num(q, i);
+    const q = all[i], s = yearSeen[qid(q)], nn = num(q, i);   /* s: 없음=안 풂 · 1=맞힘 · 2=틀림 */
     const b = document.createElement("button"); b.type = "button"; b.className = "qtile";
-    if (done) b.classList.add("done");
+    if (s === 1) b.classList.add("done");
+    if (s === 2) b.classList.add("miss");
     if (i === cur){ b.classList.add("cur"); b.setAttribute("aria-current", "page"); }
-    b.textContent = nn + (done ? " ✓" : "");
-    b.title = (mode === "year" ? nn + "번" : nn + "번째 · " + q.src) + (done ? " · 푼 문항" : "");
+    /* 색만으로 말하지 않는다(§5) — 초록엔 ✓, 빨강엔 ✗ 가 같이 간다 */
+    b.textContent = nn + (s === 1 ? " ✓" : s === 2 ? " ✗" : "");
+    b.title = (mode === "year" ? nn + "번" : nn + "번째 · " + q.src)
+            + (s === 1 ? " · 맞힌 문항" : s === 2 ? " · 틀린 문항" : "");
     b.addEventListener("click", () => seqJump(i));
     return b;
   };
