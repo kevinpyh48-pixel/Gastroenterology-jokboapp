@@ -427,9 +427,19 @@
   .minibtn{border:2px solid var(--line);background:var(--panel);color:var(--ink2);border-radius:12px;padding:8px 12px;
     font-size:13px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;cursor:pointer;font-family:inherit;}
   .minibtn:hover{border-color:var(--line-strong);color:var(--ink);}
-  /* 📄 연도별 번호 스트립 — 세로 팝업(<select>) 대신 가로 한 줄. 드릴바 둘째 줄을 통째로 쓴다.
+  /* 📄 번호 줄 — pagination 한 줄 + 「전체문항」으로 펼치는 목록. 드릴바 둘째 줄을 통째로 쓴다.
+     140문항을 한 줄에 늘어놓으면 7,000px 가로 스크롤이라 87번까지 손가락 열 번이다(2026-08-21).
      푼 문항은 색 + ✓ 두 가지로 말한다(§5 색만으로 말하지 않기). */
-  .qstrip{flex-basis:100%;display:flex;gap:6px;overflow-x:auto;padding:2px 0 2px;-webkit-overflow-scrolling:touch;}
+  .palwrap{flex-basis:100%;}
+  .pg{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;padding:2px 0;}
+  .pg .step{padding:7px 12px;color:var(--ink2);}
+  .pg .step[aria-disabled=true]{opacity:.38;cursor:default;}
+  /* 접힌 구간 표시 — 누를 수 없다. 몇 문항이 숨었는지는 title 과 .sr 이 말한다 */
+  .gap{align-self:end;padding:6px 2px;color:var(--ink2);font-weight:700;letter-spacing:.08em;user-select:none;}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
+  /* 펼친 전체 목록 — 격자가 아니라 번호가 줄줄이 흐르는 한 덩어리(사용자 선택, 2026-08-21) */
+  .palgrid{display:flex;flex-wrap:wrap;gap:6px;max-height:236px;overflow-y:auto;padding:10px;margin-top:8px;
+    background:var(--panel2);border:2px solid var(--line);border-radius:12px;}
   .qtile{flex:none;min-width:44px;padding:7px 6px;border-radius:12px;border:2px solid var(--line);background:var(--panel);
     color:var(--ink);font-family:inherit;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;cursor:pointer;}
   .qtile:hover{border-color:var(--line-strong);}
@@ -593,6 +603,28 @@
   .labcon table{width:100%;border-collapse:collapse;font-size:13px;}
   .labcon th,.labcon td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top;}
   .labcon th{background:var(--chip);color:var(--ink2);font-weight:700;}
+  /* 📖 사용법 시트 — "숨은 기능 사전". 새 컴포넌트를 최소로 두려고 표는 .labwrap/.labtable,
+     절 제목은 .labgrp 를 그대로 빌려 쓴다. 여기 있는 건 그 둘로 안 되는 것뿐이다. */
+  .hslead{color:var(--ink2);font-size:14.5px;margin:0 0 14px;}
+  .hstoc{background:var(--panel2);border:2px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 8px;}
+  .hstoc ol{margin:6px 0 0;padding-left:20px;}
+  .hstoc li{margin:3px 0;font-size:14px;}
+  .hsgo{all:unset;cursor:pointer;color:var(--vote);font-weight:700;}
+  .hsgo:hover{text-decoration:underline;}
+  .hsgo:focus-visible{outline:2px solid var(--vote);outline-offset:2px;border-radius:4px;}
+  .hsk{display:inline-block;background:var(--panel);border:2px solid var(--line-strong);border-radius:8px;
+    padding:0 7px;font-size:13px;font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums;
+    box-shadow:0 2px 0 var(--line-strong);}
+  .hsbox{border:2px solid var(--line);background:var(--panel2);border-radius:12px;
+    padding:12px 14px;margin:12px 0;font-size:14.5px;line-height:1.55;}
+  .hsbox.warn{border-color:var(--warn-line);background:var(--warn-bg);color:var(--warn);}
+  .hsbox.go{border-color:var(--accent-deep);background:var(--accent-soft);color:var(--accent-ink);}
+  .hsul{padding-left:20px;margin:6px 0;font-size:14.5px;line-height:1.55;}
+  .hsul li{margin:5px 0;}
+  .hssub{font-size:14px;font-weight:800;margin:16px 0 4px;}
+  .hsbody p{font-size:14.5px;line-height:1.55;}
+  /* 첫 칸은 기능 이름이라 끊기면 "그림 길게 누르 기" 가 된다. 제일 긴 이름이 8자라 폭도 안 터진다. */
+  .hsbody .labtable td:first-child{white-space:nowrap;font-weight:700;}
   /* 📝 시험 — 설정 시트·진행바·결과판. 색은 §2 토큰만, 선택 상태는 --vote(초록은 "맞음" 전용) */
   .exsec{margin:0 0 18px;}
   .exsec h4{margin:0 0 8px;font-family:var(--font-display);font-size:15px;color:var(--ink);letter-spacing:-.01em;}
@@ -2769,7 +2801,8 @@ function drillBar(){
   if (isSeq()){
     const strip = yearStrip();
     el.appendChild(strip);
-    const c = strip.querySelector(".qtile.cur");
+    /* pagination 줄은 늘 화면 안이라 끌어올 게 없다 — 펼친 목록의 현재 번호만 보이게 한다 */
+    const c = palOpen ? strip.querySelector(".palgrid .qtile.cur") : null;
     if (c){
       /* 직접 재서 scrollLeft 를 주면 빗나간다 — 붙인 직후엔 줄바꿈이 아직 안 끝나 clientWidth 가 절반으로
          잡힌다(실측 828px 자리에 390px). 브라우저에게 맡기고, 세로만 원위치시킨다: block:"nearest" 도
@@ -2780,24 +2813,71 @@ function drillBar(){
     }
   }
 }
-/* 📄 번호 스트립 — 결번이 애초에 목록에 없으니 "없는 번호" 검증이 필요 없다(옛 <select> 와 같은 이유).
-   현재 번호를 가운데로 끌어오는 건 drillBar 가 붙인 직후에 한다. */
+/* 📄 번호 줄 (C안) — pagination 한 줄 + 「전체문항」으로 펼치는 전체 목록.
+   결번이 애초에 목록에 없으니 "없는 번호" 검증이 필요 없다(옛 <select> 와 같은 이유).
+   ⛔ 창은 **인덱스**로 잡는다. 번호(q._n)엔 결번이 있어(2020: 34·61-64·113·116-118)
+      cur±2 를 번호로 세면 없는 번호를 가리킨다. 이동도 seqJump(인덱스) 한 곳으로만 간다. */
+let palOpen = false;                            /* 「전체문항」 펼침 — 드릴바가 매번 다시 그려지므로 밖에 둔다 */
+const PG_ALL = 12;                              /* 이 이하면 접을 게 없다 — 전부 편다 */
 function yearStrip(){
-  const wrap = document.createElement("div"); wrap.className = "qstrip";
-  wrap.setAttribute("role", "group"); wrap.setAttribute("aria-label", "문항으로 이동");
-  const cur = yearPast.length;                    /* 지금 보는 자리 = 지나온 개수 */
-  yearPast.concat(queue).forEach((q, i) => {
+  const all = yearPast.concat(queue), n = all.length, cur = yearPast.length;
+  const wrap = document.createElement("div"); wrap.className = "palwrap";
+  const nav = document.createElement("nav"); nav.className = "pg";
+  nav.setAttribute("aria-label", "문항으로 이동");
+  const num = (q, i) => mode === "year" ? q._n : (i + 1);   /* 연도별은 원본 시험지 번호가 곧 좌표다.
+                                   목록은 강의를 넘나들어 번호가 겹치므로 순번으로 센다. */
+  const tile = i => {
+    const q = all[i], done = !!yearSeen[qid(q)], nn = num(q, i);
     const b = document.createElement("button"); b.type = "button"; b.className = "qtile";
-    const done = !!yearSeen[qid(q)];
-    /* 연도별은 원본 시험지 번호가 곧 좌표다. 목록은 강의를 넘나들어 번호가 겹치므로 순번으로 센다. */
-    const n = mode === "year" ? q._n : (i + 1);
     if (done) b.classList.add("done");
-    if (i === cur){ b.classList.add("cur"); b.setAttribute("aria-current", "true"); }
-    b.textContent = n + (done ? " ✓" : "");
-    b.title = (mode === "year" ? n + "번" : n + "번째 · " + q.src) + (done ? " · 푼 문항" : "");
+    if (i === cur){ b.classList.add("cur"); b.setAttribute("aria-current", "page"); }
+    b.textContent = nn + (done ? " ✓" : "");
+    b.title = (mode === "year" ? nn + "번" : nn + "번째 · " + q.src) + (done ? " · 푼 문항" : "");
     b.addEventListener("click", () => seqJump(i));
-    wrap.appendChild(b);
+    return b;
+  };
+  const step = (t, to) => {
+    const b = document.createElement("button"); b.type = "button"; b.className = "qtile step";
+    b.textContent = t;
+    if (to < 0 || to >= n) b.setAttribute("aria-disabled", "true");
+    else b.addEventListener("click", () => seqJump(to));
+    return b;
+  };
+  /* 창 = 첫 · 마지막 · 현재±2. 양 끝에선 반대쪽으로 늘려 칸 수를 일정하게 유지한다. */
+  const win = n <= PG_ALL ? all.map((_, i) => i)
+    : [...new Set([0, n - 1, cur - 2, cur - 1, cur, cur + 1, cur + 2].concat(
+        cur <= 3 ? [1, 2, 3, 4] : [], cur >= n - 4 ? [n - 2, n - 3, n - 4, n - 5] : []))]
+      .filter(i => i >= 0 && i < n).sort((a, b) => a - b);
+  nav.appendChild(step("‹ 이전", cur - 1));
+  let prev = -1;
+  win.forEach(i => {
+    if (i - prev > 1){                          /* 건너뛴 구간은 … 하나로 접는다 */
+      const g = document.createElement("span"); g.className = "gap"; g.textContent = "…";
+      const cnt = i - prev - 1;
+      g.title = (mode === "year" ? num(all[prev + 1], prev + 1) + "번 ~ " + num(all[i - 1], i - 1) + "번 · " : "")
+              + cnt + "문항";
+      const sr = document.createElement("span"); sr.className = "sr";
+      sr.textContent = "생략된 문항 " + cnt + "개";
+      g.appendChild(sr); nav.appendChild(g);
+    }
+    nav.appendChild(tile(i)); prev = i;
   });
+  nav.appendChild(step("다음 ›", cur + 1));
+  if (n > PG_ALL){
+    /* 접힌 … 안에 건너뛴 문항이 숨는다 — 그걸 찾아가는 유일한 길이라 항상 붙여 둔다 */
+    const t = document.createElement("button"); t.type = "button"; t.className = "qtile";
+    t.textContent = "전체문항";
+    t.setAttribute("aria-expanded", String(palOpen));
+    t.setAttribute("aria-controls", "palgrid");
+    t.addEventListener("click", () => { palOpen = !palOpen; seqRender(); });
+    nav.appendChild(t);
+  }
+  wrap.appendChild(nav);
+  if (palOpen && n > PG_ALL){
+    const g = document.createElement("div"); g.className = "palgrid"; g.id = "palgrid";
+    all.forEach((_, i) => g.appendChild(tile(i)));
+    wrap.appendChild(g);
+  }
   return wrap;
 }
 function doneCard(){
@@ -3612,6 +3692,35 @@ function mountAuth(){
   if (!auth()) authOpen("login");
 }
 
+/* 📖 사용법 시트. 마크업은 이 스크립트 뒤에 오므로 배선은 첫 클릭 때 한다(exam 시트와 같은 방식).
+   개인본 전용 기능 설명은 **지우면 끝**이다 — 버튼을 숨기는 게이트와 같은 플래그를 그대로 쓴다. */
+let helpWired = false;
+function openHelp(){
+  const d = document.getElementById("helpsheet");
+  if (!d) return;
+  if (!helpWired){
+    helpWired = true;
+    const on = { wrongmd: exp("wrongmd"), mockexam: exp("mockexam"), extra: !!EXTRA_BUCKETS.length,   /* 🔮 는 플래그가 아니라 버킷 유무로 산다(뷰 버튼과 같은 판정) */
+                 warroom: !!CFG.warRoom, sync: !!(CFG.sync && DISCUSS_URL) };
+    Array.prototype.forEach.call(d.querySelectorAll("[data-only]"), (el) => {
+      if (!on[el.dataset.only]) el.remove();
+    });
+    const body = document.getElementById("helpbody");
+    Array.prototype.forEach.call(d.querySelectorAll(".hsgo"), (b) => {
+      b.addEventListener("click", () => {
+        const t = document.getElementById(b.dataset.go);
+        /* behavior:"smooth" 는 <dialog> 안의 스크롤 컨테이너에서 조용히 무시된다(실측) —
+           애니메이션이 없으니 prefers-reduced-motion 가드도 필요 없다. */
+        if (t) body.scrollTop = t.offsetTop - body.offsetTop - 8;
+      });
+    });
+    document.getElementById("helpclose").addEventListener("click", () => exHide(d));
+    d.addEventListener("click", (e) => { if (e.target === d) exHide(d); });
+  }
+  exShow(d);
+  document.getElementById("helpbody").scrollTop = 0;
+}
+
 function mountTools(){
   const wrap = document.createElement("div");
   wrap.id = "tools";
@@ -3624,6 +3733,8 @@ function mountTools(){
     b.className = "toolbtn" + (cls ? " " + cls : "");
     b.addEventListener("click", fn); return b;
   };
+  /* 📖 사용법 — 첫 사용자가 제일 먼저 볼 것이라 툴바 맨 앞. 상단 아이콘줄은 다섯이 한계라(DESIGN §6) 여기로 내렸다. */
+  wrap.appendChild(btn("📖 사용법", openHelp));
   wrap.appendChild(btn("📋 결과 복사", copyReport));
   /* 📝 담아 둔 오답 개념을 md 로 들고 나간다 — 실험 기능(개인본만). 라벨에 담긴 개수를 달아
      "몇 개 모였나"를 툴바에서 바로 본다(0개일 때 누르면 직전 추출 되돌리기). */
@@ -4004,6 +4115,130 @@ function showUpdateBanner(){
     <p class="sub" id="news-d" style="margin:0 0 12px;text-align:center;font-size:13px"></p>
     <ul id="news-ul" style="margin:0;padding-left:20px;font-size:15px;line-height:1.6"></ul>
     <div style="margin-top:18px;text-align:center"><button class="minibtn" id="news-close" type="button">확인 ✕</button></div>
+  </div>
+</dialog>
+<!-- 📖 사용법 — 기본 조작이 아니라 "모르면 평생 안 쓰는 것"만 모은다.
+     개인본 전용 기능([data-only])은 openHelp() 가 공유본에서 통째로 지운다 —
+     문서에 "개인본만" 이라고 적어 두면 공유본 독자가 없는 버튼을 찾아 헤맨다. -->
+<dialog class="sheet" id="helpsheet" aria-label="사용법">
+  <div class="sheethead">
+    <div class="sheettop"><h3>📖 숨은 기능 사전</h3>
+      <button class="minibtn" id="helpclose" type="button">닫기 ✕</button></div>
+  </div>
+  <div class="sheetbody hsbody" id="helpbody">
+    <p class="hslead">선지 누르면 채점되고 해설 열리는 것 — 그건 다들 아십니다.
+      여기 있는 건 <b>있는 줄 모르면 평생 안 쓰게 되는 것들</b>입니다.
+      위에서부터 읽을 필요 없고, 필요한 칸만 보세요.</p>
+
+    <div class="hstoc">
+      <b>목차</b>
+      <ol>
+        <li><button class="hsgo" data-go="hs1" type="button">화면에 안 적혀 있는 조작</button> — 스와이프 · 숫자키 · 그림 복사</li>
+        <li><button class="hsgo" data-go="hs2" type="button">한 문항에서 더 뽑아내기</button> — 선지 O·X·△ · 메모 · 저장</li>
+        <li><button class="hsgo" data-go="hs3" type="button">풀이 모드</button> — 시험 · 주제 이어 풀기 · 연도별 원본</li>
+        <li><button class="hsgo" data-go="hs4" type="button">같이 쓰는 기능</button> — 투표 · 논란 · 동기 정답률</li>
+        <li><button class="hsgo" data-go="hs5" type="button">곁다리</button> — lab 시트 · 메모장 · 러닝 · 결과 복사</li>
+        <li><button class="hsgo" data-go="hs6" type="button">기록이 사는 곳</button></li>
+      </ol>
+    </div>
+
+    <h4 class="labgrp" id="hs1">1. 화면에 안 적혀 있는 조작</h4>
+    <p>버튼이 없어서 아무도 안 쓰는 것들입니다. 이 절만 읽어도 본전은 뽑습니다.</p>
+    <div class="labwrap"><table class="labtable">
+      <tr><th>조작</th><th>무엇을 하나</th></tr>
+      <tr><td>👉 좌우로 밀기</td><td>왼쪽으로 밀면 다음 문제, 오른쪽이면 이전. 아직 안 푼 문항에서도 먹습니다. 세로 스크롤과 헷갈리지 않게 <b>70px 이상 · 수평에 가깝게</b> 밀어야 반응합니다.</td></tr>
+      <tr><td><span class="hsk">←</span> <span class="hsk">→</span></td><td>스와이프와 같은 길입니다. 노트북에서 푸는 분용.</td></tr>
+      <tr><td><span class="hsk">1</span>~<span class="hsk">9</span></td><td>선지 고르기. 손을 마우스로 안 옮겨도 됩니다.</td></tr>
+      <tr><td><span class="hsk">6</span></td><td>🤔 모르겠음. 다만 <b>선지가 먼저</b>라, 선지가 6개 이상인 문항에서는 6번 선지가 눌립니다.</td></tr>
+      <tr><td><span class="hsk">Enter</span></td><td>복수정답 문항의 <b>✓ 채점하기</b>. 개수를 다 고른 뒤에만 먹습니다.</td></tr>
+      <tr><td>그림 길게 누르기</td><td>그림이 클립보드로 복사됩니다. 채팅에 물어볼 때 텍스트와 따로 붙여넣으세요.</td></tr>
+      <tr><td>그림 한 번 누르기</td><td>전체화면 확대. 핀치줌도 됩니다. <span class="hsk">Esc</span> 로 닫기.</td></tr>
+    </table></div>
+    <div class="hsbox">입력창에 커서가 있거나 시트가 열려 있으면 단축키는 안 먹습니다.
+      메모를 쓰다 <span class="hsk">3</span> 을 눌러도 선지가 눌리지 않으니 안심하세요.</div>
+
+    <h4 class="labgrp" id="hs2">2. 한 문항에서 더 뽑아내기</h4>
+    <div class="hssub">🔖 선지마다 O · X · △</div>
+    <p>선지 오른쪽 끝의 동그란 칩 세 개입니다. 고르기 <b>전에</b> 각 선지가 맞다·틀리다·모르겠다를 찍어둡니다.</p>
+    <ul class="hsul">
+      <li>채점하고 나면 <b>내가 X 라고 봤는데 실제로는 옳았던 선지</b>만 모아 “잘못 본 선지” 패널로 보여줍니다.
+        정답 번호만 맞히고 넘어가면 절대 안 잡히는 구멍입니다.</li>
+      <li>채점 뒤에는 내가 찍은 칩만 남고 나머지는 사라져서 해설이 폭을 되찾습니다.</li>
+      <li>안 찍어도 됩니다. 채점에는 영향이 없습니다.</li>
+    </ul>
+    <div class="hssub">📝 메모 · ⭐ 저장 · 되돌리기</div>
+    <ul class="hsul">
+      <li><b>문항 메모</b> — 해설 아래 이 문항 전용 메모칸. 다음에 이 문항이 나오면 같이 뜹니다.</li>
+      <li><b>⭐ 저장</b> — 시험 전에 다시 볼 것만 골라둡니다. 오답노트와 별개라, 틀리지 않았어도 담을 수 있습니다.</li>
+      <li><b>되돌리기 바</b> — 잘못 눌러 채점됐을 때 화면 아래에 잠깐 뜹니다. 누르면 그 채점이 기록에서 빠집니다.</li>
+      <li data-only="wrongmd"><b>➕ 오답md에 담기</b> — 담아둔 문항들을 마크다운으로 한 번에 뽑습니다.</li>
+    </ul>
+
+    <h4 class="labgrp" id="hs3">3. 풀이 모드</h4>
+    <p>일차별 · 연도별 · 오답노트 말고 더 있습니다.</p>
+    <div class="labwrap"><table class="labtable">
+      <tr><th>모드</th><th>언제 쓰나</th></tr>
+      <tr data-only="mockexam"><td>📝 시험 만들기</td><td><b>시험 2주 전부터.</b> 탭을 열면 필터가 아니라 완성된 프리셋 카드가 먼저 나옵니다. 하나 누르면 타이머가 도는 실전 한 판이 시작되고, 시간이 끝나면 자동 제출됩니다. 여기 점수는 <b>평소 정답률과 따로</b> 셉니다. 지난 시험 성적도 남습니다.</td></tr>
+      <tr><td>📚 주제 이어 풀기</td><td>해설의 주제 칩을 누르면 <b>같은 주제 문항만</b> 연도를 넘나들며 이어집니다. 한 개념이 해마다 어떻게 변형됐는지 볼 때.</td></tr>
+      <tr><td>📄 연도별 원본</td><td>원본 시험지 순서 그대로, 선지도 안 섞습니다. 🔽 최신부터 · 🔼 오래된 것부터 정렬을 바꿀 수 있고, 번호 스트립으로 특정 문항에 바로 갑니다.</td></tr>
+      <tr><td>🧩 불완전 복원</td><td>선지가 다 안 살아난 문항 모음. 풀 수 없어 <b>채점 · 정답률 · 오답노트에서 빠져</b> 있습니다. 내용만 훑어보는 용도.</td></tr>
+      <tr data-only="extra"><td>🔮 예상문제</td><td>기출 궤적으로 뽑은 변형 문항.</td></tr>
+      <tr><td>🔍 문항 검색</td><td>키워드로 문항을 찾습니다. “아, 그 담낭 문제”가 어느 연도였는지 모를 때.</td></tr>
+    </table></div>
+    <div class="hsbox go"><b>정답률을 안 건드리는 모드가 셋 있습니다</b> — 📝 시험 · ⚖️ 논란 · 🧩 불완전 복원.
+      마음 편히 눌러도 평소 기록이 오염되지 않습니다.</div>
+
+    <h4 class="labgrp" id="hs4">4. 같이 쓰는 기능</h4>
+    <div class="hsbox warn"><b>이 앱의 정답은 선배들이 복원한 것이라 100% 확실하지 않습니다.</b>
+      그래서 정답을 외우기 전에, 이상하면 표를 던지고 이유를 남겨 주세요. 이게 이 앱에서 제일 중요한 기능입니다.</div>
+    <div class="hssub">먼저 로그인</div>
+    <p>투표 · 의견 · 동기 정답률 · 기기 간 동기화는 계정이 있어야 합니다. 우상단 🔑 입니다.
+      가입은 닉네임과 비밀번호뿐이고, <b>학번과 실명은 쓰지 마세요.</b>
+      승인 대기 상태면 그 이유가 그대로 뜹니다. “전송 실패”로 뭉개지 않습니다.</p>
+    <div class="hssub">🗳 정답 투표 → ⚖️ 논란</div>
+    <ul class="hsul">
+      <li>문제를 푼 뒤 해설 아래에서 한 표를 던집니다. 표는 바꿀 수 있습니다.</li>
+      <li>표를 던지면 그 문항은 <b>오답노트에서 빠지고 ⚖️ 논란으로 갑니다.</b>
+        답이 갈리는 문항을 “틀린 문제”로 반복 복습해봐야 소용이 없기 때문입니다.</li>
+      <li>표가 팽팽하거나 최다표가 복원 정답과 어긋나면 자동으로 논란 탭에 모입니다.
+        <b>시험 전날 여기만 훑어도</b> 애매한 문항 정리가 끝납니다.</li>
+      <li>💬 이유는 <b>근거와 함께</b> 적어 주세요. 정리본 몇 쪽, 어느 표 · 그림인지까지.</li>
+    </ul>
+    <div data-only="sync">
+      <div class="hssub">📊 동기 정답률</div>
+      <p>하단 툴바에서 켜면 내 풀이 기록이 올라가고, 문항마다 <b>3명 이상이 푼 경우에만</b> 동기들의 정답률이 막대로 뜹니다.
+        내가 틀린 게 나만 틀린 건지 다들 틀리는 문제인지가 갈립니다. 끄면 안 올라가고 남의 것도 안 보입니다.</p>
+      <div class="hssub">🔄 동기화</div>
+      <p>기기가 여러 대일 때 우상단 🔄 로 기록을 맞춥니다. 매번 쓰는 버튼이 아니라 툴바에서 빼두었습니다.</p>
+    </div>
+
+    <h4 class="labgrp" id="hs5">5. 곁다리</h4>
+    <div class="labwrap"><table class="labtable">
+      <tr><th>기능</th><th>무엇을 하나</th></tr>
+      <tr><td>🧪 lab 정상치</td><td>우상단 🧪, 또는 문항 속 수치 박스 아래 “수치가 헷갈린다면?”. 정상범위 시트가 열리고, <b>➕ 내가 추가하는 수치</b>로 내 항목도 넣을 수 있습니다.</td></tr>
+      <tr><td>🧪 수치 테스트</td><td>같은 시트의 둘째 탭. 정상범위를 거꾸로 물어보는 퀴즈입니다. 전해질 · ABG 처럼 외워야 하는 것들.</td></tr>
+      <tr><td>📝 메모장</td><td>우상단 📝. 문항에 안 붙는 자유 메모라 여러 장 만들 수 있습니다.</td></tr>
+      <tr><td>🏃 오늘의 러닝</td><td>맞히면 100m, 틀리거나 모름이면 50m. 시작할 때 페이스를 고르고, 다 풀면 그 페이스로 실제 선수들과 나란히 세워 줍니다. 누적 거리가 쌓입니다.</td></tr>
+      <tr><td>📋 결과 복사</td><td><b>[정답률 로그]</b> 가 클립보드에 담깁니다. Claude 채팅에 붙여넣으면 약점 브리핑과 오늘 미션이 나옵니다.</td></tr>
+      <tr data-only="warroom"><td>📊 상황실로</td><td>D-day 대시보드로 지금 성적을 넘깁니다.</td></tr>
+      <tr><td>📣 새 버전 알림</td><td>새 문항이나 해설이 배포되면 뭐가 바뀌었는지 목록으로 한 번 뜹니다.</td></tr>
+    </table></div>
+
+    <h4 class="labgrp" id="hs6">6. 기록이 사는 곳</h4>
+    <ul class="hsul">
+      <li>정답률 · 오답노트 · 메모는 <b>그 브라우저 안에만</b> 있습니다. 폰과 노트북 기록은 따로 놉니다.
+        주로 쓸 기기 하나를 정하거나, 로그인해서 🔄 동기화를 쓰세요.</li>
+      <li>브라우저의 사이트 데이터를 지우면 같이 날아갑니다. <b>시크릿 창은 닫는 순간 사라집니다.</b></li>
+      <li>새 버전이 배포돼도 기록은 유지됩니다.</li>
+      <li><b>↺ 기록 초기화</b> 는 되돌릴 수 없습니다. ⭐ 저장 · 메모 · 시험 이력은 채점 기록이 아니라 안 지워집니다.</li>
+      <li>서버로 올라가는 건 투표 · 의견 · (켠 경우) 동기 정답률뿐입니다.</li>
+    </ul>
+
+    <div class="hsbox go"><b>처음이면 이 순서로</b> — ① 📋 목록으로 한 바퀴, 모르는 건 찍지 말고 🤔 모르겠음
+      → ② 🔀 셔플 드릴로 선지 위치 암기 깨기, 이때부터 선지 O · X · △ 를 찍어보세요
+      → ③ ❌ 오답노트를 매일 조금씩
+      <span data-only="mockexam">→ ④ 2주 전부터 📝 시험 프리셋으로 실전 한 판씩</span>
+      → ⑤ 전날엔 ⚖️ 논란만.</div>
   </div>
 </dialog>
 <dialog class="sheet" id="labsheet" aria-label="lab 정상치">
