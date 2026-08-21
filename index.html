@@ -636,6 +636,7 @@
   .exchip:hover{border-color:var(--line-strong);}
   .exchip:focus-visible{outline:none;border-color:var(--vote);}
   .exchip[aria-pressed="true"]{border-color:var(--vote);background:var(--vote-soft);color:var(--ink);}
+  .exchip:disabled{opacity:.38;cursor:default;}
   .exrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:14px;color:var(--ink2);}
   .exnum,.extext{font:inherit;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;
     border:2px solid var(--line);border-radius:12px;padding:8px 10px;background:var(--panel);color:var(--ink);}
@@ -2821,6 +2822,7 @@ function drillBar(){
    ⛔ 창은 **인덱스**로 잡는다. 번호(q._n)엔 결번이 있어(2020: 34·61-64·113·116-118)
       cur±2 를 번호로 세면 없는 번호를 가리킨다. 이동도 seqJump(인덱스) 한 곳으로만 간다. */
 let palOpen = false;                            /* 「전체문항」 펼침 — 드릴바가 매번 다시 그려지므로 밖에 둔다 */
+let palFilt = "all";                            /* 펼친 목록 거르개: all · todo(안 풂) · miss(틀림) */
 const PG_ALL = 12;                              /* 이 이하면 접을 게 없다 — 전부 편다 */
 function yearStrip(){
   const all = yearPast.concat(queue), n = all.length, cur = yearPast.length;
@@ -2880,8 +2882,26 @@ function yearStrip(){
   }
   wrap.appendChild(nav);
   if (palOpen && n > PG_ALL){
+    const cnt = { all: n, todo: 0, miss: 0 };
+    all.forEach(q => { const s = yearSeen[qid(q)]; if (!s) cnt.todo++; else if (s === 2) cnt.miss++; });
+    /* 고른 갈래가 비면 전체로 되돌린다 — 마지막 오답을 맞히는 순간 빈 목록만 남는 걸 막는다 */
+    if (!cnt[palFilt]) palFilt = "all";
+    /* 칩은 시험 프리셋의 .exchips/.exchip 를 그대로 쓴다 — 새 칩 언어를 만들지 않는다 */
+    const box = document.createElement("div"); box.className = "exchips"; box.style.marginTop = "8px";
+    box.setAttribute("role", "group"); box.setAttribute("aria-label", "문항 거르기");
+    [["전체", "all"], ["안 푼 것", "todo"], ["틀린 것", "miss"]].forEach(([label, key]) => {
+      const c = document.createElement("button"); c.type = "button"; c.className = "exchip";
+      c.textContent = label + " " + cnt[key];
+      c.setAttribute("aria-pressed", String(palFilt === key));
+      if (!cnt[key]) c.disabled = true;
+      else c.addEventListener("click", () => { palFilt = key; seqRender(); });
+      box.appendChild(c);
+    });
+    wrap.appendChild(box);
+    const keep = q => palFilt === "all" ? true
+                    : palFilt === "todo" ? !yearSeen[qid(q)] : yearSeen[qid(q)] === 2;
     const g = document.createElement("div"); g.className = "palgrid"; g.id = "palgrid";
-    all.forEach((_, i) => g.appendChild(tile(i)));
+    all.forEach((q, i) => { if (keep(q)) g.appendChild(tile(i)); });
     wrap.appendChild(g);
   }
   return wrap;
