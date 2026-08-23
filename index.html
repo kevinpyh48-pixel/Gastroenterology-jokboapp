@@ -3647,21 +3647,36 @@ function auAdmin(){
   if (!on || !sheet || !sheet.open) return;      /* 시트가 닫혀 있으면 굳이 부르지 않는다 */
   box.textContent = "";
   const h = document.createElement("div");
-  h.style.cssText = "font-weight:700;margin:12px 0 6px"; h.textContent = "👥 계정 승인";
+  h.style.cssText = "font-weight:700;margin:12px 0 6px"; h.textContent = "👥 계정 · 풀이량";
   box.appendChild(h);
   const list = document.createElement("div"); list.textContent = "불러오는 중…"; box.appendChild(list);
-  api({ fn: "users" }, (r) => {
+  /* 풀이량은 서버가 이미 사람별로 접어서 준다(fn=users). 과목을 같이 보내는 이유:
+     한 계정이 여러 과목을 풀므로 안 보내면 다른 과목 문항까지 합산돼 이 앱의 진도와 안 맞는다. */
+  api({ fn: "users", subject: SUBJECT }, (r) => {
     if (!r || !r.ok){ list.textContent = (r && r.error) || "목록을 불러오지 못했습니다"; return; }
     const us = r.users || [];
     list.textContent = "";
     if (!us.length){ list.textContent = "계정이 없습니다"; return; }
+    /* 승인 대기가 맨 위(서버 정렬과 같은 이유), 그 아래는 많이 푼 순 — 누가 굴리고 있는지가 한눈에 */
+    us.sort((a, b) => (b.tier === "pending") - (a.tier === "pending") || (b.n || 0) - (a.n || 0));
+    h.textContent = "👥 계정 · 풀이량 — " + us.length + "명 · 합계 "
+      + us.reduce((a, u) => a + (u.n || 0), 0) + "문항";
+    const md = (t) => { const d = new Date(t); return (d.getMonth() + 1) + "/" + d.getDate(); };
     us.forEach((u) => {
       const row = document.createElement("div");
       row.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line)";
-      const who = document.createElement("span");
-      who.style.cssText = "flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+      const who = document.createElement("div");
+      who.style.cssText = "flex:1;min-width:0";
+      const l1 = document.createElement("div");
+      l1.style.cssText = "overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
       /* 남이 정한 문자열이다 — innerHTML 로 붙이지 않는다 */
-      who.textContent = u.nick + " (" + u.login + ") · " + u.tier;
+      l1.textContent = u.nick + " (" + u.login + ") · " + u.tier;
+      const l2 = document.createElement("div");
+      l2.style.cssText = "font-size:12px;color:var(--ink2);margin-top:2px";
+      l2.textContent = u.n
+        ? u.n + "문항 · 첫시도 " + Math.round(u.ok / u.n * 100) + "% · 최근 " + md(u.last)
+        : "아직 푼 문항 없음";
+      who.appendChild(l1); who.appendChild(l2);
       row.appendChild(who);
       const mk = (label, tier, danger) => {
         const b = document.createElement("button");
