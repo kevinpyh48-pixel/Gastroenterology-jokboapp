@@ -139,7 +139,7 @@
     box-shadow:0 2px 0 var(--line);}
   .opt:hover:not(:disabled){border-color:var(--vote);background:var(--vote-soft);box-shadow:0 2px 0 var(--vote);}
   .opt:disabled{cursor:default;}
-  .opt .mk{flex:0 0 24px;height:24px;border-radius:8px;border:2px solid var(--line-strong);display:grid;place-items:center;font-size:13px;font-weight:700;color:var(--ink2);}
+  .opt .mk, .soptone .mk{flex:0 0 24px;height:24px;border-radius:8px;border:2px solid var(--line-strong);display:grid;place-items:center;font-size:13px;font-weight:700;color:var(--ink2);}
   .opt.correct{background:var(--ok-bg);border-color:var(--ok);box-shadow:0 2px 0 var(--ok);}
   .opt.correct .mk{border-color:var(--ok);background:var(--ok);color:#fff;}
   .opt.wrong{background:var(--bad-bg);border-color:var(--bad);box-shadow:0 2px 0 var(--bad);}
@@ -176,6 +176,22 @@
   .omki.q{border-left-color:var(--ink2);}
   .omki .ask{display:block;color:var(--ink2);font-size:12px;margin-top:3px;}
   .omki .oex2{display:block;color:var(--ink2);font-size:13px;margin-top:4px;}
+  /* 🔖 선지함 담기 확인 — 선지 버튼 바로 아래 한 줄. .optrow 가 세로 flex 라 폭을 안 건드린다 */
+  .sask{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--ink2);
+        background:var(--panel);border:2px dashed var(--line);border-radius:12px;padding:6px 10px;}
+  .sask b{color:var(--ink);}
+  .sask button{border:2px solid var(--line);background:var(--bg);color:var(--ink);border-radius:999px;
+                padding:3px 12px;font:inherit;font-weight:700;cursor:pointer;}
+  .sask button.yes{background:var(--ok);border-color:var(--ok);color:#fff;}
+  .sask.done{border-style:solid;border-color:var(--ok);}
+  /* 🔖 선지 카드 — 문항 맥락을 위에 두고 선지 하나만 크게 */
+  .soptask{font-size:14px;color:var(--ink2);margin:0 0 6px;}
+  .soptone{display:flex;gap:10px;align-items:flex-start;
+           border:2px solid var(--line-strong);border-radius:14px;padding:12px 14px;font-size:17px;
+           font-weight:700;line-height:1.5;background:var(--panel);}
+  .soptv{font-weight:800;}
+  .soptv.yes{color:var(--ok-deep);}
+  .soptv.no{color:var(--bad);}
   .reveal{display:none;border-top:2px solid var(--line);margin-top:4px;padding-top:14px;}
   /* 🃏 카드는 한가운데로 — 그림 한 장을 마주 보는 화면이라 왼쪽 정렬이 어색하다 */
   .card.flash .qtext{text-align:center;}
@@ -774,6 +790,7 @@
         <button class="modebtn viewbtn" data-view="cards" aria-pressed="false">🃏 카드</button>
         <button class="modebtn viewbtn" data-view="exam" aria-pressed="false">📝 시험</button>
         <button class="modebtn viewbtn" data-view="review" aria-pressed="false">❌ 오답노트</button>
+        <button class="modebtn viewbtn" data-view="sopt" aria-pressed="false">🔖 선지</button>
         <button class="modebtn viewbtn" data-view="dispute" aria-pressed="false">⚖️ 논란</button>
         <button class="modebtn viewbtn" data-view="broken" aria-pressed="false">🧩 불완전 복원</button>
       </div>
@@ -1177,6 +1194,11 @@ function save(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e
    문항당 5~10바이트라 전 문항을 다 찍어도 10KB 안쪽이다.
    "정답을 맞혔나"(progress)와 별개다 — 정답은 맞혔어도 ③을 왜 버렸는지 몰랐을 수 있다. */
 const OMK_K = SK("optmark");
+/* 문두의 마지막 문장 = "무엇을 묻는가". 선지를 혼자 두지 않으려고 늘 함께 단다. */
+const askOf = (t) => {
+  const parts = String(t == null ? "" : t).replace(/<[^>]+>/g, " ").match(/[^.?]+[.?]?/g);
+  return parts ? parts[parts.length - 1].trim() : "";
+};
 const omkGet = (q) => load(OMK_K)[qid(q)] || "";
 function omkSet(q, i, v){
   const m = load(OMK_K), id = qid(q);
@@ -1185,6 +1207,24 @@ function omkSet(q, i, v){
   const t = a.join("").replace(/-+$/, "");       /* 꼬리의 미표시는 버린다 */
   if (t) m[id] = t; else delete m[id];
   save(OMK_K, m);
+}
+
+/* 🔖 선지함 — 🔖선지 탭이 도는 목록. 값은 원본 선지 번호를 쉼표로 이은 문자열({qid: "0,3"}).
+   두 갈래로 들어온다: ① ? 를 찍으면 그 자리에서 담을지 묻는다(사용자 결정)
+                      ② 채점에서 내가 찍은 O/X 가 실제와 어긋난 선지는 묻지 않고 자동으로 담는다
+                         — 어긋났다는 건 채점 전엔 알 수 없어서 물어볼 시점이 없다.
+   OMK(마킹 기록)와 따로 둔다. 마킹은 "그때 내가 어떻게 봤나"의 기록이고 이건 "다시 볼 것"의 목록이라,
+   ? 를 해제하면 마킹은 사라져야 하지만 담아 둔 건 남아야 한다. */
+const SBAG_K = SK("optbag");
+const sbagIdx = (m, id) => (m[id] || "").split(",").filter((x) => x !== "");
+const sbagHas = (q, i) => sbagIdx(load(SBAG_K), qid(q)).indexOf(String(i)) >= 0;
+function sbagSet(q, i, on){
+  const m = load(SBAG_K), id = qid(q), a = sbagIdx(m, id), k = String(i), at = a.indexOf(k);
+  if (on && at < 0) a.push(k);
+  else if (!on && at >= 0) a.splice(at, 1);
+  else return false;                                   /* 이미 그 상태 — 저장도 다시 그리기도 없다 */
+  if (a.length) m[id] = a.join(","); else delete m[id];
+  save(SBAG_K, m); return true;
 }
 
 /* 📝 오답md 담기 — 해설을 읽다 "이 개념을 몰랐다" 싶은 문항만 내가 직접 담는 목록(qid 키).
@@ -1712,7 +1752,7 @@ function richText(s){
 function cardHead(d, label, opt){
   const head = document.createElement("div"); head.className = "cardhead";
   const qnum = document.createElement("span"); qnum.className = "qnum"; qnum.textContent = label; head.appendChild(qnum);
-  const crossDay = curDay === ALL || isXView(view) || mode === "year" || mode === "dispute" || mode === "review" || mode === "broken" || mode === "topic" || mode === "exam";
+  const crossDay = curDay === ALL || isXView(view) || mode === "year" || mode === "dispute" || mode === "review" || mode === "broken" || mode === "topic" || mode === "exam" || mode === "sopt";
   if (crossDay){ const dc = document.createElement("span"); dc.className = "daychip"; dc.textContent = d._day; head.appendChild(dc); }
   const sc = document.createElement("span"); sc.className = "srcchip"; sc.textContent = "★ " + d.src; head.appendChild(sc);
   if (d.badge){ const bd = document.createElement("span"); bd.className = "badge"; bd.textContent = d.badge; head.appendChild(bd); }
@@ -2070,7 +2110,7 @@ function buildCard(d, label, opt){
     });
     if (opt.slim || opt.preview){ opts.appendChild(b); return; }   /* 논란·미리보기는 마킹할 자리가 아니다 */
     const row = document.createElement("div"); row.className = "optrow";
-    row.appendChild(b); row.appendChild(omkChips(d, o, idx, omkPainters, isLocked, noAnswer));
+    row.appendChild(b); row.appendChild(omkChips(d, o, idx, omkPainters, isLocked, noAnswer, row));
     opts.appendChild(row);
   });
   if (chosen.size) optEls.forEach((e, j) => e.classList.toggle("chosen", chosen.has(j)));
@@ -2127,14 +2167,37 @@ function buildCard(d, label, opt){
    저장은 화면 위치(idx)가 아니라 원본 선지 번호(o._i)로 — 드릴은 선지를 섞기 때문.
    painters: 채점·되돌리기 때 카드가 칩을 다시 그리게 buildCard 가 모아 두는 자리. */
 const OMK_LABEL = { o: "O", x: "X", "?": "?" };
-function omkChips(d, o, idx, painters, isLocked, noAnswer){
+function omkChips(d, o, idx, painters, isLocked, noAnswer, row){
   const i = (o._i == null ? idx : o._i);
+  let asked = false;                       /* "아니오"는 이 카드가 떠 있는 동안만 유효 — 다시 ? 를 찍으면 또 묻는다 */
+  const bagEl = document.createElement("div"); bagEl.className = "sask"; bagEl.style.display = "none";
+  const paintBag = () => {
+    const bagged = sbagHas(d, i), cur = omkGet(d)[i] || "-";
+    const ask = !bagged && cur === "?" && !asked;
+    bagEl.style.display = (bagged || ask) ? "" : "none";
+    if (!bagged && !ask) return;
+    bagEl.innerHTML = "";
+    bagEl.classList.toggle("done", bagged);
+    const t = document.createElement("span");
+    t.innerHTML = bagged ? "🔖 <b>선지함</b>에 담겨 있어요" : "🔖 이 선지, <b>선지함</b>에 담을까요?";
+    bagEl.appendChild(t);
+    const btn = (label, cls, fn) => {
+      const b = document.createElement("button"); b.type = "button"; b.textContent = label;
+      if (cls) b.className = cls;
+      b.addEventListener("click", fn); bagEl.appendChild(b);
+    };
+    if (bagged) btn("빼기", "", () => { sbagSet(d, i, false); asked = true; paintBag(); });
+    else {
+      btn("담기", "yes", () => { sbagSet(d, i, true); paintBag(); });
+      btn("아니오", "", () => { asked = true; paintBag(); });
+    }
+  };
   const box = document.createElement("div"); box.className = "omk";
   const btns = {};
   [["o", "mo", "이게 답 같다"], ["x", "mx", "답이 아니다"], ["?", "mq", "모르겠다"]].forEach(([v, cls, aria]) => {
     const c = document.createElement("button"); c.type = "button"; c.className = "omkb " + cls;
     c.textContent = OMK_LABEL[v]; c.setAttribute("aria-label", aria);
-    c.addEventListener("click", () => { if (isLocked()) return; omkSet(d, i, v); paint(); });
+    c.addEventListener("click", () => { if (isLocked()) return; asked = false; omkSet(d, i, v); paint(); });
     box.appendChild(c); btns[v] = c;
   });
   const paint = () => {
@@ -2142,6 +2205,10 @@ function omkChips(d, o, idx, painters, isLocked, noAnswer){
     /* 정답 미상 문항(2020·2021 다수)엔 대조할 기준이 없다 — 보기에 색을 안 칠하는 것과 같은 이유 */
     const judged = locked && cur !== "-" && cur !== "?" && !noAnswer;
     const right = judged && ((cur === "o") === !!o.ok);
+    /* 어긋나게 본 선지는 묻지 않고 담는다 — 채점 전엔 어긋난 줄 모르니 물어볼 시점이 없다.
+       paint 는 채점·되돌리기 때마다 다시 도는데 sbagSet 이 멱등이라 중복으로 안 쌓인다. */
+    if (judged && !right) sbagSet(d, i, true);
+    paintBag();
     Object.keys(btns).forEach((k) => {
       const c = btns[k], mine = (k === cur);
       c.disabled = locked;
@@ -2159,6 +2226,7 @@ function omkChips(d, o, idx, painters, isLocked, noAnswer){
   };
   painters.push(paint);
   paint();
+  if (row) row.appendChild(bagEl);         /* 선지 버튼 아래 한 줄. 칩(box)은 absolute 라 흐름을 안 탄다 */
   return box;
 }
 
@@ -2658,10 +2726,6 @@ function renderBroken(){
 function omkPanel(deck){
   const m = load(OMK_K), seen = {}, groups = {};
   let n = 0;
-  const askOf = (t) => {
-    const parts = String(t == null ? "" : t).replace(/<[^>]+>/g, " ").match(/[^.?]+[.?]?/g);
-    return parts ? parts[parts.length - 1].trim() : "";
-  };
   DAYS.forEach((day) => {
     BUNDLE[day].data.forEach((q) => {
       const id = qid(q), mk = m[id];
@@ -2700,6 +2764,129 @@ function omkPanel(deck){
     dt.appendChild(g);
   });
   deck.appendChild(dt);
+}
+
+
+/* ===== 🔖 선지 =====
+   선지함(SBAG_K)에 담긴 선지를 한 개씩, 해설을 가린 채 띄운다. 채점 버튼으로 맞추는 게 아니라
+   "왜 이게 답인가/아닌가"를 먼저 스스로 말해 보고 [답 보기]로 대조하는 인출 훈련이다.
+   O/X 로 채점하지 않는 이유: 족보 선지의 ok 는 "이 진술이 참"이 아니라 "이 상황의 정답"이라,
+   맥락을 떼고 참·거짓으로 굳히면 그 자체로 옳은 선지를 X 로 외우게 된다(omkPanel 과 같은 이유).
+   그래서 발문을 통째로 위에 두고, 뒷면에서도 "이 상황에서" 라는 말을 빼지 않는다.
+   스케줄은 새로 만들지 않았다 — 오답노트·카드와 같은 srsUpdate 를 쓰되,
+   키를 src+"#선지번호" 로 줘서 문항 SRS 와 겹치지 않게만 한다. */
+let soptSkip = 0;
+function soptPool(){
+  const bag = load(SBAG_K), out = [], seen = {};
+  DAYS.filter((d) => !CARD_BUCKETS.includes(d)).forEach((day) => {
+    BUNDLE[day].data.forEach((q) => {
+      const id = qid(q);
+      if (seen[id] || !bag[id] || !(q.opts || []).length) return;   /* 같은 문항이 일차·연도 버킷에 중복 실린다 */
+      seen[id] = 1;
+      sbagIdx(bag, id).forEach((k) => {
+        const i = +k, o = q.opts[i];
+        if (o) out.push({ q: Object.assign({}, q, { _day: day }), o: o, i: i });
+      });
+    });
+  });
+  return out;
+}
+/* SRS 키 — 문항이 아니라 "그 문항의 i 번 선지".
+   ponytail: 선지 SRS 는 기기 간 동기화를 안 탄다. syncDelta 가 progress 의 ts 를 보고 srs 를 딸려
+   보내는데 선지엔 progress 기록이 없어서다. 기기를 옮겨 다니며 선지를 돌리게 되면 그때 syncDelta 에
+   선지 키(#가 붙은 것)를 따로 실어 보내면 된다 — 목록(SBAG_K)만 옮겨도 대부분 복구된다. */
+const soptKey = (it) => ({ lec: it.q.lec, src: it.q.src + "#" + it.i });
+function renderSopt(){
+  const deck = document.getElementById("deck"); deck.innerHTML = "";
+  const all = soptPool(), srs = load(SK("srs")), now = Date.now();
+  const dueOf = (it) => { const c = srs[qid(soptKey(it))]; return c ? c.due : 0; };
+  const due = all.filter((it) => dueOf(it) <= now).sort((a, b) => dueOf(a) - dueOf(b));
+  const info = document.createElement("div"); info.className = "donecard";
+  info.innerHTML = "<h2>🔖 선지</h2><p>오늘 볼 선지 <b>" + due.length + "</b>개 / 담긴 선지 <b>" + all.length + "</b>개</p>";
+  deck.appendChild(info);
+  if (!all.length){
+    info.innerHTML = "<h2>담긴 선지가 없습니다</h2><p>문제를 풀며 선지 옆 <b>?</b> 칩을 누르면 "
+      + "\"선지함에 담을까요?\" 가 뜹니다. 채점에서 <b>O/X 를 실제와 반대로 찍은 선지</b>는 묻지 않고 자동으로 담깁니다.</p>";
+    return;
+  }
+  if (!due.length){
+    const later = all.map(dueOf).filter((t) => t > now).sort((a, b) => a - b);
+    const d2 = document.createElement("div"); d2.className = "donecard";
+    d2.innerHTML = "<h2>오늘 선지 완료 🎉</h2><p>담긴 선지를 모두 봤습니다. 다음 예정: <b>"
+      + (later.length ? new Date(later[0]).toLocaleString() : "-") + "</b></p>";
+    deck.appendChild(d2); return;
+  }
+  const ci = ((soptSkip % due.length) + due.length) % due.length;
+  deck.appendChild(buildSopt(due[ci], due.length));
+  keepCardInView();
+}
+function buildSopt(it, left){
+  const d = it.q, o = it.o;
+  const card = document.createElement("section"); card.className = "card flash";
+  card.appendChild(cardHead(d, "남은 " + left + "개", {}));
+
+  /* 맥락 먼저 — 선지를 절대 혼자 두지 않는다 */
+  const ask = document.createElement("p"); ask.className = "soptask";
+  ask.innerHTML = richText(d.q); card.appendChild(ask);
+  if (d.labsImg && IMG[d.labsImg]){
+    const im = document.createElement("img"); im.src = IMG[d.labsImg]; im.className = "labshot";
+    im.alt = "문제 조건(원본 캡처)"; im.loading = "lazy";
+    im.addEventListener("click", () => openLightbox(IMG[d.labsImg]));
+    card.appendChild(im);
+  } else if (d.labs){ const lb = document.createElement("div"); lb.className = "labs"; lb.innerHTML = richText(d.labs); card.appendChild(lb); }
+  const row = document.createElement("div"); row.className = "imgrow";
+  (Array.isArray(d.img) ? d.img : d.img ? [d.img] : []).forEach((k) => {
+    if (!IMG[k]) return;
+    const im = document.createElement("img"); im.src = IMG[k]; im.alt = "문제 그림";
+    im.loading = "lazy"; im.className = "thumb";
+    im.addEventListener("click", () => openLightbox(IMG[k]));
+    row.appendChild(im);
+  });
+  if (row.children.length) card.appendChild(row);
+
+  const one = document.createElement("div"); one.className = "soptone";
+  one.innerHTML = "<span class=\"mk\">" + optNum(o) + "</span> " + richText(o.t.replace(/^([①-⑩]|\d)[\.\)]?\s*/, ""));
+  card.appendChild(one);
+
+  const reveal = document.createElement("div"); reveal.className = "reveal show";
+  const blk = (lab, cls, html) => {
+    const bl = document.createElement("div"); bl.className = "rblock";
+    const l = document.createElement("span"); l.className = "rlab " + cls; l.textContent = lab; bl.appendChild(l);
+    const tx = document.createElement("div"); tx.className = "rtx"; tx.innerHTML = html; bl.appendChild(tx);
+    return bl;
+  };
+  const flip = document.createElement("button"); flip.className = "nextbtn"; flip.type = "button";
+  flip.textContent = "답 보기";
+  const bar = document.createElement("div"); bar.className = "nextbar"; bar.appendChild(flip);
+  card.appendChild(bar);
+
+  flip.addEventListener("click", () => {
+    bar.remove();
+    /* 정답 미상 문항(2020·2021 다수)엔 대조할 기준이 없다 — 보기에 색을 안 칠하는 것과 같은 이유 */
+    const hasAns = (d.opts || []).some((x) => x.ok);
+    reveal.appendChild(blk("이 상황에서", "ans", hasAns
+      ? '<span class="soptv ' + (o.ok ? "yes" : "no") + '">' + (o.ok ? "이게 정답이었습니다" : "답이 아니었습니다") + "</span>"
+      : '<span class="soptv">이 문항은 정답이 확정되지 않았습니다 — 해설로만 판단하세요</span>'));
+    if (o.ex) reveal.appendChild(blk("선지 해설", "basic", richText(o.ex)));
+    if (d.note) reveal.appendChild(blk("📌 문항 해설", "intent", richText(d.note)));
+    const grade = document.createElement("div"); grade.className = "nextbar";
+    [["몰랐음", false], ["알았음", true]].forEach((pair) => {
+      const b = document.createElement("button"); b.className = "nextbtn"; b.type = "button";
+      b.textContent = pair[0];
+      /* 문항 정답률(progress)은 건드리지 않는다 — 선지 인출은 "문제를 맞혔나"와 다른 축이다 */
+      b.addEventListener("click", () => { srsUpdate(soptKey(it), pair[1]); soptSkip = 0; renderSopt(); });
+      grade.appendChild(b);
+    });
+    reveal.appendChild(grade);
+    const out = document.createElement("div"); out.className = "nextbar";
+    const rm = document.createElement("button"); rm.className = "nextbtn"; rm.type = "button";
+    rm.textContent = "🔖 선지함에서 빼기";
+    rm.addEventListener("click", () => { sbagSet(d, it.i, false); soptSkip = 0; renderSopt(); });
+    out.appendChild(rm); reveal.appendChild(out);
+    card.appendChild(reveal);
+    keepCardInView();
+  });
+  return card;
 }
 
 /* ===== 🃏 카드 =====
@@ -4171,6 +4358,7 @@ function refresh(){
   else if (view === "dispute") renderDispute();
   else if (view === "broken") renderBroken();
   else if (view === "review") renderReview();
+  else if (view === "sopt") renderSopt();
   else if (view === "cards") renderCards();
   else if (mode === "list") startList();
   else startDrill(mode);
@@ -4416,6 +4604,7 @@ function showUpdateBanner(){
       <tr><td>📄 연도별 원본</td><td>원본 시험지 순서 그대로, 선지도 안 섞습니다. 🔽 최신부터 · 🔼 오래된 것부터 정렬을 바꿀 수 있고, 번호 스트립으로 특정 문항에 바로 갑니다.</td></tr>
       <tr><td>🧩 불완전 복원</td><td>선지가 다 안 살아난 문항 모음. 풀 수 없어 <b>채점 · 정답률 · 오답노트에서 빠져</b> 있습니다. 내용만 훑어보는 용도.</td></tr>
       <tr data-only="extra"><td>🔮 예상문제</td><td>기출 궤적으로 뽑은 변형 문항.</td></tr>
+      <tr><td>🔖 선지</td><td>문항이 아니라 <b>선지 하나씩</b> 봅니다. 발문을 위에 두고 선지 하나만 띄운 뒤, “왜 이게 답인가/아닌가”를 스스로 말해 보고 <b>답 보기</b>로 대조합니다. 맞히는 게 아니라 <b>떠올리는</b> 훈련이라 채점하지 않고, 알았음/몰랐음만 눌러 안키식으로 다시 돌아옵니다. 담기는 두 갈래 — 풀다가 선지 옆 <b>?</b> 를 누르면 담을지 물어보고, 채점에서 <b>O/X 를 실제와 반대로 찍은 선지</b>는 묻지 않고 자동으로 담깁니다.</td></tr>
       <tr><td>🔍 문항 검색</td><td>키워드로 문항을 찾습니다. “아, 그 담낭 문제”가 어느 연도였는지 모를 때.</td></tr>
     </table></div>
     <div class="hsbox go"><b>정답률을 안 건드리는 모드가 셋 있습니다</b> — 📝 시험 · ⚖️ 논란 · 🧩 불완전 복원.
