@@ -3495,7 +3495,7 @@ const exShow = (d) => { if (typeof d.showModal === "function"){ if (!d.open) d.s
 const exHide = (d) => { if (typeof d.close === "function" && d.open) d.close(); else d.removeAttribute("open"); };
 const EXCFG_K = SK("examcfg"), EXLOG_K = SK("examlog");
 const examDefaults = () => ({ name:"", strict:true, min:0, n:20, src:"all",
-  tryMode:"all", tryN:1, tryLo:0, tryHi:9, accOn:false, accLo:0, accHi:100, buckets:[], lec:"all", sub:"" });
+  tryMode:"all", tryN:1, tryLo:0, tryHi:9, accOn:false, accLo:0, accHi:100, buckets:[], years:[], lec:"all", sub:"" });
 /* ⚙️ 직접 만들기 시트의 시작 상태. **범위는 빈 채로 연다**(0문항) — 여기서 일차를 미리
    켜 두면 교수님·강의록 칩이 영영 안 뜬다. 그 칩들은 일차를 딱 하나 골랐을 때만 나오고,
    전 범위로 풀 길은 이미 프리셋 카드가 맡고 있다. 시트는 좁혀 들어가는 길이다. */
@@ -3537,14 +3537,24 @@ const examBuckets = () => DAY_BUCKETS.concat(YEAR_BUCKETS, EXTRA_BUCKETS, KMLE_B
 
 function examPool(cfg){
   const st = statsByQid(), seen = {}, out = [];
-  const want = cfg.buckets || [];
-  if (!want.length) return [];                                /* 고른 일차만 출제 — 안 고르면 0문항 */
+  const years = cfg.years || [];
+  /* 일차를 안 고르고 연도만 골랐으면 기출 전부(일차 + 연도 버킷)를 훑는다 — 프리셋과 같은 범위.
+     일차 버킷을 앞에 둬야 중복 제거가 일차 사본을 남겨 진도 기록이 📅일차별과 맞는다. */
+  const want = (cfg.buckets || []).length ? cfg.buckets : years.length ? DAY_BUCKETS.concat(YEAR_BUCKETS) : [];
+  if (!want.length) return [];                                /* 일차도 연도도 안 고르면 0문항 */
   examBuckets().forEach((day) => {
     if (!BUNDLE[day] || want.indexOf(day) < 0) return;
     BUNDLE[day].data.forEach((q) => {
       const id = qid(q);
-      if (seen[id]) return;                                   /* 연도·일차 사본 중복 제거 */
+      /* 연도·일차 사본 중복 제거 — 키는 src 다. qid(lec|src)는 연도 버킷의 옛 교수명과 일차 버킷의
+         현 교수명이 달라 같은 문항을 두 번 통과시켰다(2023 실측 96→118). src 는 전 버킷에서 고유하다. */
+      const dk = q.src ? String(q.src) : id;
+      if (seen[dk]) return;
       if (!(q.opts || []).some((o) => o.ok)) return;           /* 정답이 없으면 채점이 성립하지 않는다 */
+      if (years.length){                                      /* 연도는 src("2023 Q26")에서 읽는다 — 예상문제·KMLE 는 연도가 없어 빠진다 */
+        const yn = srcYN(q);
+        if (!yn || years.indexOf(yn.y) < 0) return;
+      }
       if (cfg.lec !== "all" && qProf(q) !== cfg.lec) return;
       /* 3단 = 그 교수의 강의록. ""=교수 전체, NOSUB=배정 안 된 문항 (day 보기 pool() 과 같은 규칙) */
       if (cfg.sub && (cfg.sub === NOSUB ? !!q.sub : q.sub !== cfg.sub)) return;
@@ -3559,7 +3569,7 @@ function examPool(cfg){
         const a = accOf(v);
         if (a === null || a < (cfg.accLo|0) || a > (cfg.accHi|0)) return;   /* 안 푼 문항은 정답률이 없다 */
       }
-      seen[id] = 1;
+      seen[dk] = 1;
       out.push(Object.assign({}, q, { _day: day }));
     });
   });
@@ -3729,7 +3739,7 @@ function examIntro(){
   el.appendChild(grid);
 
   const more = document.createElement("button"); more.type = "button"; more.className = "exmore";
-  more.textContent = "⚙️ 직접 만들기 — 일차 · 교수님 · 강의록 · 정답률로 고르기";
+  more.textContent = "⚙️ 직접 만들기 — 일차 · 연도 · 교수님 · 강의록 · 정답률로 고르기";
   more.addEventListener("click", openExamSheet);
   el.appendChild(more);
 
@@ -3846,7 +3856,7 @@ function openExamSheet(){
   nameEl.addEventListener("input", () => { cfg.name = nameEl.value; });
   s0.appendChild(nameEl);
 
-  const s1 = sec("범위 — 일차", "<b>고른 일차만</b> 출제됩니다 — 하나도 안 고르면 0문항입니다. "
+  const s1 = sec("범위 — 일차", "<b>고른 일차만</b> 출제됩니다 — 일차도 연도도 안 고르면 0문항입니다. "
     + "<b>일차를 하나만 고르면</b> 그 아래에 교수님 칩이 뜨고, 강의록이 있는 교수님은 강의록까지 좁힐 수 있습니다. "
     + "같은 문항이 여러 버킷에 겹쳐 있어도 한 번만 나옵니다.");
   /* 연도 버킷은 칩으로 안 내놓는다 — 일차 사본과 같은 문항이라 고를 이유가 없고 목록만 길어진다.
@@ -3891,6 +3901,16 @@ function openExamSheet(){
       (k) => cfg.sub === k, (k) => { cfg.sub = k; });
   }
   drawLec(); drawSub();
+
+  /* 연도 = 일차 위에 겹치는 AND 필터. 일차를 안 고르면 그 해 전체 시험지가 범위다. */
+  const sy = sec("범위 — 연도", "<b>고른 연도만</b> 출제됩니다 — 안 고르면 전 연도입니다. "
+    + "일차를 안 고르고 연도만 고르면 <b>그 해 시험지 전체</b>가 범위가 됩니다.");
+  const yItems = allYears().map(([y, n]) => [y + " (" + n + ")", y]);
+  cfg.years = (cfg.years || []).filter((y) => yItems.some(([, k]) => k === y));
+  chips(sy, yItems, (k) => cfg.years.indexOf(k) >= 0, (k) => {
+    const i = cfg.years.indexOf(k);
+    if (i >= 0) cfg.years.splice(i, 1); else cfg.years.push(k);
+  });
 
   const s2 = sec("문제 필터");
   chips(s2, [["전체 문제", "all"], ["⭐ 저장한 문제 (" + savedCount() + ")", "saved"],
